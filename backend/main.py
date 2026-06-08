@@ -172,7 +172,55 @@ async def delete_file(key: str):
             detail="Error interno al eliminar el archivo del almacenamiento cloud."
         )
 
-# Endpoint obligatorio de auditoría operativa / Health Check
+# CU-03 + CU-07 (Feature Extra P-09): Generar enlace temporal de descarga
+# En vez de usar URL publica, se genera una presigned URL GET con TTL de 60 minutos
+DOWNLOAD_TTL_SECONDS = 3600  # 60 minutos segun requisito del Anexo B para P-09
+
+@app.post("/api/files/download-url")
+async def generate_download_url(request: dict):
+    key = request.get("key", "")
+
+    # SEC-03: Validar que el key sea de la carpeta uploads/
+    if not key.startswith("uploads/"):
+        raise HTTPException(
+            status_code=400,
+            detail="Solo se pueden descargar archivos dentro de la carpeta uploads/."
+        )
+
+    try:
+        # Verificar que el archivo existe en el bucket
+        s3_client.head_object(Bucket=BUCKET_NAME, Key=key)
+
+        # Generar presigned URL de descarga con TTL de 60 minutos
+        download_url = s3_client.generate_presigned_url(
+            ClientMethod="get_object",
+            Params={
+                "Bucket": BUCKET_NAME,
+                "Key": key
+            },
+            ExpiresIn=DOWNLOAD_TTL_SECONDS
+        )
+
+        return {
+            "downloadUrl": download_url,
+            "expiresIn": DOWNLOAD_TTL_SECONDS,
+            "message": f"Enlace temporal generado. Expira en 60 minutos."
+        }
+
+    except ClientError as e:
+        error_code = e.response["Error"]["Code"]
+        if error_code == "404" or error_code == "NoSuchKey":
+            raise HTTPException(
+                status_code=404,
+                detail="El archivo no fue encontrado en el almacenamiento cloud."
+            )
+        # SEC-07: Caja Negra
+        raise HTTPException(
+            status_code=500,
+            detail="Error interno al generar el enlace de descarga."
+        )
+
+# Endpoint obligatorio de auditoria operativa / Health Check
 @app.get("/healthz")
 async def health_check():
     return {"status": "healthy"}
