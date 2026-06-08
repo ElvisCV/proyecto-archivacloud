@@ -1,121 +1,221 @@
-# NOTAS DE PROGRESO — ArchivaCloud SpA (P-09)
+# ArchivaCloud SpA -- Portal de Carga Seguro
 
-**Proyecto:** ArchivaCloud SpA (Portal de Carga Seguro)
-**Estudiante:** Elvis Alejandro Candia Vargas (Trabajo Individual)
-**Grupo:** P-09
-
----
-
-## Restricciones del Grupo (P-09)
-* Formatos permitidos: .png y .svg
-* Peso máximo: 6 MB
-* Bucket: archivacloud-p09
-* Región: us-east-1
+**Codigo de pareja:** P-09  
+**Integrante:** Elvis Alejandro Candia Vargas
 
 ---
 
-## Entorno Técnico
-* **Backend:** Python 3.10+, FastAPI, Uvicorn, Boto3 (AWS SDK), Pydantic, python-dotenv
-* **Frontend:** React 19 + Vite + Axios + TypeScript
-* Región cloud utilizada: us-east-1
-* Bucket asignado: archivacloud-p09
+## Parametros Unicos Respetados (Anexo B)
 
-### Variables de configuración (.env.example)
-```env
-FRONTEND_URL=http://localhost:5173
-AWS_ACCESS_KEY_ID=Clave_AWS_Aqui
-AWS_SECRET_ACCESS_KEY=Secreto_AWS_Aqui
-AWS_SESSION_TOKEN=Token_AWS_Aqui
+| Parametro | Valor |
+|-----------|-------|
+| Tipos de archivo permitidos | PNG, SVG |
+| Tamano maximo | 6 MB |
+| Nombre del bucket | archivacloud-p09 |
+| Region | us-east-1 |
+| Feature extra obligatoria | Enlace temporal de descarga (presigned URL con TTL de 60 min) |
+
+---
+
+## Arquitectura
+
+El portal usa el patron de **presigned URLs**: el archivo se sube directamente desde el navegador a S3, sin pasar por el backend.
+
+```
+Browser (React)  --(1) POST /api/upload/presigned-url -->  FastAPI Backend
+Browser (React)  <--(presignedUrl, key)--                  FastAPI Backend
+Browser (React)  --(2) PUT presignedUrl --------------->   Amazon S3
+```
+
+Para descargas, se usa el mismo patron con URLs temporales de 60 minutos (feature extra P-09):
+
+```
+Browser (React)  --(1) POST /api/files/download-url -->  FastAPI Backend
+Browser (React)  <--(downloadUrl, expiresIn)--           FastAPI Backend
+Browser (React)  --(2) GET downloadUrl ----------------> Amazon S3
+```
+
+**Foto del diagrama manuscrito:** ver `docs/arquitectura.jpg`
+
+---
+
+## Stack y Versiones
+
+| Componente | Tecnologia | Version |
+|------------|-----------|---------|
+| Backend | Python | 3.10+ |
+| Framework API | FastAPI | ultima |
+| Servidor ASGI | Uvicorn | ultima |
+| AWS SDK | Boto3 | ultima |
+| Validacion | Pydantic | v2 |
+| Frontend | React | 19 |
+| Bundler | Vite | 8 |
+| HTTP Client | Axios | 1.17+ |
+| Lenguaje Frontend | TypeScript | 6 |
+
+---
+
+## Variables de Entorno
+
+| Variable | Descripcion | Ejemplo |
+|----------|-------------|---------|
+| `FRONTEND_URL` | URL del frontend para CORS | `http://localhost:5173` |
+| `AWS_ACCESS_KEY_ID` | Clave de acceso de AWS Academy | `ASIAQUVCHP...` |
+| `AWS_SECRET_ACCESS_KEY` | Clave secreta de AWS Academy | `TbJO+64CK7...` |
+| `AWS_SESSION_TOKEN` | Token de sesion temporal de voclabs | `IQoJb3Jpz2...` |
+
+---
+
+## Politica IAM Minima
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:PutObject",
+        "s3:GetObject",
+        "s3:DeleteObject"
+      ],
+      "Resource": "arn:aws:s3:::archivacloud-p09/*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": "s3:ListBucket",
+      "Resource": "arn:aws:s3:::archivacloud-p09"
+    }
+  ]
+}
 ```
 
 ---
 
-## Sprint 1 — Setup + Backend Mínimo
+## Configuracion CORS del Bucket
 
-### Logros
-* Repositorio Git creado y compartido en GitHub.
-* Bucket S3 `archivacloud-p09` creado en `us-east-1`.
-* Usuario IAM configurado con credenciales temporales de AWS Academy.
-* Endpoint `POST /api/upload/presigned-url` funcionando: genera presigned URL para subida directa a S3.
-* Endpoint `GET /healthz` de auditoría operativa.
-* Firma S3 configurada con **Signature V4** (`s3v4`) para compatibilidad con credenciales temporales de voclabs.
-
-### Controles de Seguridad Aplicados (Sprint 1)
-* **SEC-01:** `.gitignore` configurado para aislar `backend/.env`, `venv/`, `__pycache__/`, `frontend/.env`.
-* **SEC-02:** CORS restrictivo en FastAPI, solo permite peticiones desde `http://localhost:5173` y `http://127.0.0.1:5173`.
-* **SEC-03:** Sanitización de nombres de archivo con UUID v4 (evita colisiones y Path Traversal) + lista blanca de extensiones (.png, .svg).
-* **SEC-04:** Validación de tamaño máximo (6 MB) tanto en frontend como en backend.
-* **SEC-07:** Excepciones de AWS controladas con código HTTP 500 genérico (evita filtración de datos internos).
+```json
+[
+  {
+    "AllowedHeaders": ["*"],
+    "AllowedMethods": ["GET", "PUT", "DELETE", "HEAD"],
+    "AllowedOrigins": ["http://localhost:5173", "http://127.0.0.1:5173"],
+    "ExposeHeaders": ["ETag"],
+    "MaxAgeSeconds": 3600
+  }
+]
+```
 
 ---
 
-## Sprint 2 — Backend Completo + Frontend Base
+## Endpoints de la API
 
-### Logros
-* Endpoint `GET /api/files` implementado: lista objetos del bucket bajo `uploads/` con nombre, tamaño y fecha.
-* Endpoint `DELETE /api/files/{key}` implementado: elimina archivos con validación de prefijo `uploads/`.
-* Frontend SPA en React + Vite + TypeScript completamente funcional:
-  - Formulario de subida con validación de extensión y tamaño en cliente.
-  - Tabla de archivos con nombre, tamaño formateado y fecha.
-  - Botón de eliminar con `window.confirm` (acción irreversible).
-  - Refresco automático de la lista al subir o eliminar.
-  - Botón manual de refresco.
-* Firma de presigned URL corregida: se incluye `ContentType` en los parámetros de firma para que coincida con el header `Content-Type` enviado por Axios.
-
-### Endpoints disponibles (Sprint 2)
-| Método | Ruta | Descripción |
+| Metodo | Ruta | Descripcion |
 |--------|------|-------------|
 | POST | `/api/upload/presigned-url` | Genera presigned URL de subida |
-| GET | `/api/files` | Lista archivos del bucket |
+| GET | `/api/files` | Lista archivos del bucket (nombre, tamano, fecha) |
 | DELETE | `/api/files/{key}` | Elimina un archivo del bucket |
+| POST | `/api/files/download-url` | Genera presigned URL de descarga (TTL 60 min) |
 | GET | `/healthz` | Health check |
 
-### Cómo correr el proyecto
-**Backend:**
+---
+
+## Pasos para Correr el Proyecto
+
+### Backend
 ```bash
 cd backend
 python -m venv venv
 venv\Scripts\activate
 pip install -r requirements.txt
-# Crear backend/.env con credenciales de AWS Academy
+# Crear backend/.env con credenciales de AWS Academy (ver .env.example)
 uvicorn main:app --reload
 ```
 
-**Frontend:**
+### Frontend
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
+
 Abrir `http://localhost:5173` en el navegador.
 
 ---
 
-## Sprint 3 -- Feature Extra + Seguridad
+## Escaneo de Dependencias (SEC-09)
 
-### Feature Extra P-09: Enlace Temporal de Descarga
-* Implementado endpoint `POST /api/files/download-url` que genera una presigned URL de tipo GET con TTL de 60 minutos.
-* El frontend solicita el enlace temporal al hacer clic en "Descargar" y lo abre en una nueva pestana.
-* No se usan URLs publicas: todos los archivos se acceden exclusivamente via presigned URLs temporales.
-* Constante `DOWNLOAD_TTL_SECONDS = 3600` configurable en el backend.
+### pip-audit (Backend)
+```
+No se encontraron vulnerabilidades conocidas.
+```
 
-### Endpoint agregado
-| Metodo | Ruta | Descripcion |
-|--------|------|-------------|
-| POST | `/api/files/download-url` | Genera presigned URL de descarga (60 min TTL) |
-
-### Controles de Seguridad Aplicados (Sprint 3)
-* **SEC-05:** Politica IAM de minimo privilegio: solo las acciones `s3:PutObject`, `s3:GetObject`, `s3:DeleteObject`, `s3:ListBucket` sobre el bucket `archivacloud-p09`.
-* **SEC-06:** Block Public Access activo en el bucket. Sin bucket policy permisiva.
-* **SEC-08:** Encriptacion en reposo con SSE-S3 activado en el bucket.
-* **SEC-09:** Escaneo de dependencias con `pip-audit` y `npm audit`. Resultados documentados.
-* **SEC-10:** Todas las llamadas a S3 y al backend se realizan sobre HTTPS. En produccion se configura TLS con certificado.
+### npm audit (Frontend)
+```
+found 0 vulnerabilities
+```
 
 ---
 
-## Proximos pasos (Sprint 4)
-* README final completo segun Anexo D.
-* Reporte de seguridad (SEC-01 a SEC-10).
-* Tag `v1.0.0`.
-* Screencast de pair programming.
-* Declaracion de uso de IA (Anexo A).
+## Feature Extra P-09: Enlace Temporal de Descarga
+
+### Que hace
+Genera un enlace temporal de descarga (presigned URL con TTL de 60 minutos) en vez de exponer URLs publicas del bucket S3.
+
+### Por que este diseno
+- **Seguridad:** Los archivos en S3 nunca son publicos. El bucket tiene Block Public Access activo.
+- **Control de acceso:** Cada enlace expira en exactamente 60 minutos, evitando acceso indefinido.
+- **Flujo:** El usuario hace clic en "Descargar", el frontend solicita al backend un enlace temporal, y el backend genera la presigned URL GET con `ExpiresIn=3600`.
+- **Constante configurable:** `DOWNLOAD_TTL_SECONDS = 3600` permite ajustar el TTL facilmente.
+
+---
+
+## Controles de Seguridad (SEC-01 a SEC-10)
+
+Ver detalle completo en `docs/reporte_seguridad.md`.
+
+| ID | Control | Estado |
+|----|---------|--------|
+| SEC-01 | Secretos fuera del repo | Implementado |
+| SEC-02 | CORS restrictivo | Implementado |
+| SEC-03 | Validacion de entrada | Implementado |
+| SEC-04 | Limite de tamano | Implementado |
+| SEC-05 | IAM minimo privilegio | Implementado |
+| SEC-06 | S3 cerrado al publico | Implementado |
+| SEC-07 | Errores sin info sensible | Implementado |
+| SEC-08 | Encriptacion en reposo | Implementado |
+| SEC-09 | Escaneo de dependencias | Implementado |
+| SEC-10 | TLS de extremo a extremo | Implementado |
+
+---
+
+## Notas de Progreso
+
+### Sprint 1 -- Setup + Backend Minimo
+- Repositorio Git creado y compartido en GitHub.
+- Bucket S3 `archivacloud-p09` creado en `us-east-1`.
+- Endpoint `POST /api/upload/presigned-url` funcionando.
+- Endpoint `GET /healthz` de auditoria operativa.
+- Firma S3 configurada con Signature V4 para credenciales temporales.
+
+### Sprint 2 -- Backend Completo + Frontend Base
+- Endpoints `GET /api/files` y `DELETE /api/files/{key}` implementados.
+- Frontend SPA con subida, listado y eliminacion de archivos.
+- Barra de progreso visible durante la subida.
+- Refresco automatico de la lista al subir o eliminar.
+
+### Sprint 3 -- Feature Extra + Seguridad
+- Feature extra P-09 implementada: presigned URL de descarga con TTL 60 min.
+- Controles SEC-01 a SEC-10 implementados y documentados.
+- Reporte de seguridad creado en `docs/reporte_seguridad.md`.
+
+### Sprint 4 -- Documentacion + Defensa
+- README final completo segun Anexo D.
+- Tag `v1.0.0` creado.
+
+---
+
+## Autor
+
+**Elvis Alejandro Candia Vargas**  
+Carrera: Ciberseguridad / Ingenieria en Seguridad Informatica
