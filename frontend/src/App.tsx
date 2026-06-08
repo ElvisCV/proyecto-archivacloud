@@ -47,6 +47,7 @@ export default function App() {
   const [loadingFiles, setLoadingFiles] = useState<boolean>(false);
   const [deletingKey, setDeletingKey] = useState<string | null>(null);
   const [downloadingKey, setDownloadingKey] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<number>(0);
 
   // CU-02: Cargar la lista de archivos desde el backend
   const fetchArchivos = useCallback(async () => {
@@ -117,15 +118,23 @@ export default function App() {
       const { presignedUrl } = presignedResponse.data;
       
       setStatus('Paso 2: Transfiriendo archivo binario directamente a Amazon S3 mediante PUT...');
+      setUploadProgress(0);
 
-      // 2. ENVÍO DIRECTO AL BUCKET DE S3 (PUT con Content-Type que coincide con la firma)
+      // 2. ENVÍO DIRECTO AL BUCKET DE S3 (PUT con Content-Type y barra de progreso)
       await axios.put(presignedUrl, file, {
         headers: {
           'Content-Type': file.type
+        },
+        onUploadProgress: (progressEvent) => {
+          if (progressEvent.total) {
+            const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+            setUploadProgress(percent);
+          }
         }
       });
 
-      setStatus(`¡Carga completada de forma segura en la nube!: ${file.name}`);
+      setUploadProgress(100);
+      setStatus(`Carga completada de forma segura en la nube: ${file.name}`);
       setFile(null);
 
       // Refrescar la lista automáticamente después de subir
@@ -142,6 +151,7 @@ export default function App() {
       setStatus('');
     } finally {
       setIsUploading(false);
+      setUploadProgress(0);
     }
   };
 
@@ -213,6 +223,28 @@ export default function App() {
 
           {status && <div style={{ padding: '10px', backgroundColor: '#e2f0d9', color: '#385723', borderRadius: '4px', fontSize: '14px', borderLeft: '4px solid #385723' }}>{status}</div>}
           {error && <div style={{ padding: '10px', backgroundColor: '#fce4d6', color: '#c65911', borderRadius: '4px', fontSize: '14px', borderLeft: '4px solid #c65911' }}>{error}</div>}
+
+          {/* CU-01: Barra de progreso visible durante la subida */}
+          {isUploading && (
+            <div style={{ width: '100%', backgroundColor: '#e0e0e0', borderRadius: '4px', overflow: 'hidden' }}>
+              <div
+                style={{
+                  width: `${uploadProgress}%`,
+                  height: '24px',
+                  backgroundColor: uploadProgress === 100 ? '#28a745' : '#0070c0',
+                  transition: 'width 0.3s ease',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'white',
+                  fontSize: '12px',
+                  fontWeight: 'bold'
+                }}
+              >
+                {uploadProgress}%
+              </div>
+            </div>
+          )}
 
           <button 
             type="submit" 
