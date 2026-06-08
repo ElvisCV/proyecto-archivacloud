@@ -30,7 +30,7 @@ AWS_SESSION_TOKEN=Token_AWS_Aqui
 
 ---
 
-## Sprint 1 — Setup + Backend Mínimo ✅
+## Sprint 1 — Setup + Backend Mínimo
 
 ### Logros
 * Repositorio Git creado y compartido en GitHub.
@@ -49,7 +49,7 @@ AWS_SESSION_TOKEN=Token_AWS_Aqui
 
 ---
 
-## Sprint 2 — Backend Completo + Frontend Base ✅
+## Sprint 2 — Backend Completo + Frontend Base
 
 ### Logros
 * Endpoint `GET /api/files` implementado: lista objetos del bucket bajo `uploads/` con nombre, tamaño y fecha.
