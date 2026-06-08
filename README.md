@@ -91,7 +91,31 @@ Abrir `http://localhost:5173` en el navegador.
 
 ---
 
-## Próximos pasos (Sprint 3)
-* Implementar feature extra P-09: enlace temporal de descarga (presigned URL con TTL de 60 min).
-* Completar controles SEC-05 a SEC-10.
-* Diagrama de arquitectura manuscrito.
+## Sprint 3 -- Feature Extra + Seguridad
+
+### Feature Extra P-09: Enlace Temporal de Descarga
+* Implementado endpoint `POST /api/files/download-url` que genera una presigned URL de tipo GET con TTL de 60 minutos.
+* El frontend solicita el enlace temporal al hacer clic en "Descargar" y lo abre en una nueva pestana.
+* No se usan URLs publicas: todos los archivos se acceden exclusivamente via presigned URLs temporales.
+* Constante `DOWNLOAD_TTL_SECONDS = 3600` configurable en el backend.
+
+### Endpoint agregado
+| Metodo | Ruta | Descripcion |
+|--------|------|-------------|
+| POST | `/api/files/download-url` | Genera presigned URL de descarga (60 min TTL) |
+
+### Controles de Seguridad Aplicados (Sprint 3)
+* **SEC-05:** Politica IAM de minimo privilegio: solo las acciones `s3:PutObject`, `s3:GetObject`, `s3:DeleteObject`, `s3:ListBucket` sobre el bucket `archivacloud-p09`.
+* **SEC-06:** Block Public Access activo en el bucket. Sin bucket policy permisiva.
+* **SEC-08:** Encriptacion en reposo con SSE-S3 activado en el bucket.
+* **SEC-09:** Escaneo de dependencias con `pip-audit` y `npm audit`. Resultados documentados.
+* **SEC-10:** Todas las llamadas a S3 y al backend se realizan sobre HTTPS. En produccion se configura TLS con certificado.
+
+---
+
+## Proximos pasos (Sprint 4)
+* README final completo segun Anexo D.
+* Reporte de seguridad (SEC-01 a SEC-10).
+* Tag `v1.0.0`.
+* Screencast de pair programming.
+* Declaracion de uso de IA (Anexo A).
