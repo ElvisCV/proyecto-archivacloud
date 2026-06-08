@@ -8,9 +8,14 @@ from pydantic import BaseModel, Field
 from botocore.exceptions import ClientError
 from botocore.config import Config
 from dotenv import load_dotenv
+import logging
 
 # Cargar las variables secretas del archivo .env (AWS Academy Credentials)
 load_dotenv()
+
+# SEC-07: Configurar logging interno (nunca se expone al cliente)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logger = logging.getLogger("archivacloud")
 
 app = FastAPI(title="ArchivaCloud - Portal P-09")
 
@@ -100,14 +105,16 @@ async def generate_upload_url(request: PresignedUrlRequest):
             ExpiresIn=900  # Expira en 15 minutos
         )
         
+        logger.info(f"Presigned URL generada para subida: {object_key}")
         return {
             "presignedUrl": presigned_url,
             "key": object_key,
             "publicUrl": f"https://{BUCKET_NAME}.s3.{REGION_NAME}.amazonaws.com/{object_key}"
         }
         
-    except ClientError:
-        # SEC-07: Caja Negra - Ocultar trazas internas de error por seguridad
+    except ClientError as e:
+        # SEC-07: Caja Negra - Log interno, mensaje generico al cliente
+        logger.error(f"Error al generar presigned URL: {e}")
         raise HTTPException(
             status_code=500,
             detail="Error interno al procesar la solicitud con el almacenamiento cloud."
@@ -134,10 +141,12 @@ async def list_files():
                 "lastModified": obj["LastModified"].isoformat()
             })
 
+        logger.info(f"Listado de archivos: {len(archivos)} encontrados")
         return {"files": archivos}
 
-    except ClientError:
+    except ClientError as e:
         # SEC-07: Caja Negra
+        logger.error(f"Error al listar archivos: {e}")
         raise HTTPException(
             status_code=500,
             detail="Error interno al listar los archivos del almacenamiento cloud."
@@ -157,6 +166,7 @@ async def delete_file(key: str):
         # Verificar que el objeto existe antes de eliminar
         s3_client.head_object(Bucket=BUCKET_NAME, Key=key)
         s3_client.delete_object(Bucket=BUCKET_NAME, Key=key)
+        logger.info(f"Archivo eliminado: {key}")
         return {"message": f"Archivo '{key}' eliminado exitosamente."}
 
     except ClientError as e:
