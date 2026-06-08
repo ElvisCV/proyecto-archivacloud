@@ -46,6 +46,7 @@ export default function App() {
   const [archivos, setArchivos] = useState<ArchivoS3[]>([]);
   const [loadingFiles, setLoadingFiles] = useState<boolean>(false);
   const [deletingKey, setDeletingKey] = useState<string | null>(null);
+  const [downloadingKey, setDownloadingKey] = useState<string | null>(null);
 
   // CU-02: Cargar la lista de archivos desde el backend
   const fetchArchivos = useCallback(async () => {
@@ -144,6 +145,29 @@ export default function App() {
     }
   };
 
+  // CU-03 + CU-07 (Feature Extra P-09): Descargar archivo con enlace temporal
+  const handleDownload = async (key: string, fileName: string) => {
+    setDownloadingKey(key);
+    setError('');
+
+    try {
+      const response = await axios.post(`${API_BASE_URL}/api/files/download-url`, { key });
+      const { downloadUrl } = response.data;
+      // Abrir el enlace temporal en una nueva pestaña
+      window.open(downloadUrl, '_blank');
+      setStatus(`Enlace temporal generado para "${fileName}". Expira en 60 minutos.`);
+    } catch (err: any) {
+      console.error(err);
+      if (err.response?.data?.detail) {
+        setError(err.response.data.detail);
+      } else {
+        setError('Error al generar el enlace de descarga.');
+      }
+    } finally {
+      setDownloadingKey(null);
+    }
+  };
+
   // CU-04: Eliminar archivo con confirmación
   const handleDelete = async (key: string, fileName: string) => {
     const confirmar = window.confirm(
@@ -157,7 +181,6 @@ export default function App() {
     try {
       await axios.delete(`${API_BASE_URL}/api/files/${key}`);
       setStatus(`Archivo "${fileName}" eliminado exitosamente.`);
-      // Refrescar la lista automáticamente después de eliminar
       await fetchArchivos();
     } catch (err: any) {
       console.error(err);
@@ -176,7 +199,7 @@ export default function App() {
       {/* Encabezado */}
       <div style={{ border: '1px solid #ccc', borderRadius: '8px', padding: '20px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', marginBottom: '20px' }}>
         <h2 style={{ color: '#0070c0', margin: '0 0 4px' }}>ArchivaCloud SpA - Portal de Carga Seguro (P-09)</h2>
-        <p style={{ fontSize: '14px', color: '#666', margin: 0 }}>Desarrollo Frontend e Integración - Sprint 2</p>
+        <p style={{ fontSize: '14px', color: '#666', margin: 0 }}>Desarrollo Frontend e Integración - Sprint 3</p>
         
         <form onSubmit={handleUpload} style={{ display: 'flex', flexDirection: 'column', gap: '15px', marginTop: '20px' }}>
           <label style={{ fontWeight: 'bold', color: '#333' }}>Seleccione el archivo a subir (.png o .svg, máx. 6MB):</label>
@@ -235,6 +258,22 @@ export default function App() {
                   <td style={{ padding: '10px', color: '#666' }}>{formatBytes(archivo.size)}</td>
                   <td style={{ padding: '10px', color: '#666' }}>{formatDate(archivo.lastModified)}</td>
                   <td style={{ padding: '10px', textAlign: 'center' }}>
+                    <button
+                      onClick={() => handleDownload(archivo.key, archivo.fileName)}
+                      disabled={downloadingKey === archivo.key}
+                      style={{
+                        padding: '5px 12px',
+                        backgroundColor: downloadingKey === archivo.key ? '#ccc' : '#28a745',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: downloadingKey === archivo.key ? 'not-allowed' : 'pointer',
+                        fontSize: '13px',
+                        marginRight: '6px'
+                      }}
+                    >
+                      {downloadingKey === archivo.key ? 'Generando...' : 'Descargar'}
+                    </button>
                     <button
                       onClick={() => handleDelete(archivo.key, archivo.fileName)}
                       disabled={deletingKey === archivo.key}
