@@ -215,6 +215,7 @@ async def generate_download_url(request: DownloadUrlRequest):
             ExpiresIn=DOWNLOAD_TTL_SECONDS
         )
 
+        logger.info(f"Enlace temporal de descarga generado para: {key} (TTL: {DOWNLOAD_TTL_SECONDS}s)")
         return {
             "downloadUrl": download_url,
             "expiresIn": DOWNLOAD_TTL_SECONDS,
