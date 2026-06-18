@@ -259,7 +259,12 @@ export default function App() {
       {/* CU-02: Lista de archivos */}
       <div style={{ border: '1px solid #ccc', borderRadius: '8px', padding: '20px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-          <h3 style={{ color: '#333', margin: 0 }}>Archivos en el Bucket</h3>
+          <h3 style={{ color: '#333', margin: 0 }}>
+            Archivos en el Bucket
+            {archivos.length > 0 && (
+              <span style={{ marginLeft: '8px', fontSize: '13px', color: '#666', fontWeight: 'normal' }}>({archivos.length} archivo{archivos.length !== 1 ? 's' : ''})</span>
+            )}
+          </h3>
           <button 
             onClick={fetchArchivos} 
             disabled={loadingFiles}
@@ -327,6 +332,12 @@ export default function App() {
             </tbody>
           </table>
         )}
+      </div>
+
+      {/* Pie de pagina */}
+      <div style={{ marginTop: '20px', padding: '15px', textAlign: 'center', fontSize: '12px', color: '#999', borderTop: '1px solid #eee' }}>
+        <p style={{ margin: '0 0 4px' }}>ArchivaCloud SpA - Grupo P-09 | Los enlaces de descarga expiran en 60 minutos</p>
+        <p style={{ margin: 0 }}>Formatos permitidos: PNG, SVG | Tamano maximo: 6 MB</p>
       </div>
     </div>
   );
