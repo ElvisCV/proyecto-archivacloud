@@ -52,6 +52,10 @@ class PresignedUrlRequest(BaseModel):
     fileType: str
     fileSize: int
 
+# Modelo Pydantic para validar la solicitud de descarga (SEC-03)
+class DownloadUrlRequest(BaseModel):
+    key: str = Field(..., min_length=1)
+
 def sanitizar_nombre_archivo(filename: str) -> str:
     """Genera un identificador único alfanumérico para evitar colisiones y errores de firma (SEC-03)"""
     _, ext = os.path.splitext(filename)
@@ -187,8 +191,8 @@ async def delete_file(key: str):
 DOWNLOAD_TTL_SECONDS = 3600  # 60 minutos segun requisito del Anexo B para P-09
 
 @app.post("/api/files/download-url")
-async def generate_download_url(request: dict):
-    key = request.get("key", "")
+async def generate_download_url(request: DownloadUrlRequest):
+    key = request.key
 
     # SEC-03: Validar que el key sea de la carpeta uploads/
     if not key.startswith("uploads/"):
