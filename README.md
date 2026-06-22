@@ -218,4 +218,5 @@ Ver detalle completo en `docs/reporte_seguridad.md`.
 ## Autor
 
 **Elvis Alejandro Candia Vargas**  
-Carrera: Ciberseguridad / Ingenieria en Seguridad Informatica
+Carrera: Ingenieria Informatica  
+Asignatura: Arquitectura Multi Cloud
