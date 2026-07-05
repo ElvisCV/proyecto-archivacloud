@@ -10,4 +10,5 @@ backend/venv/
 backend/__pycache__/
 
 # Archivos del enunciado (no son parte del entregable)
-*.docx
+*.docx
+ProyectoDynamoDB/
