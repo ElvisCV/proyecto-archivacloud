@@ -19,7 +19,7 @@
 
 ## Arquitectura
 
-El portal usa el patron de **presigned URLs**: el archivo se sube directamente desde el navegador a S3, sin pasar por el backend.
+El portal usa el patron de **presigned URLs**: el archivo se sube directamente desde el navegador a S3, sin pasar por el backend. Ademas, los metadatos de cada archivo se registran en **DynamoDB** (Arquitectura Multi Cloud: S3 + DynamoDB).
 
 ```
 Browser (React)  --(1) POST /api/upload/presigned-url -->  FastAPI Backend
@@ -112,11 +112,33 @@ Browser (React)  --(2) GET downloadUrl ----------------> Amazon S3
 
 | Metodo | Ruta | Descripcion |
 |--------|------|-------------|
-| POST | `/api/upload/presigned-url` | Genera presigned URL de subida |
+| POST | `/api/upload/presigned-url` | Genera presigned URL de subida + registra metadatos en DynamoDB |
 | GET | `/api/files` | Lista archivos del bucket (nombre, tamano, fecha) |
-| DELETE | `/api/files/{key}` | Elimina un archivo del bucket |
+| DELETE | `/api/files/{key}` | Elimina un archivo de S3 y su registro de DynamoDB |
 | POST | `/api/files/download-url` | Genera presigned URL de descarga (TTL 60 min) |
-| GET | `/healthz` | Health check |
+| GET | `/api/metadata` | Consulta los metadatos registrados en DynamoDB |
+| GET | `/healthz` | Health check (S3 + DynamoDB) |
+
+---
+
+## DynamoDB (Arquitectura Multi Cloud)
+
+### Tabla: `archivacloud-p09-files`
+
+| Atributo | Tipo | Descripcion |
+|----------|------|-------------|
+| `id_tabla` | String (PK) | UUID unico del registro |
+| `s3_key` | String | Key del objeto en S3 (ej: `uploads/uuid.png`) |
+| `nombre_original` | String | Nombre original del archivo subido |
+| `tipo_archivo` | String | MIME type (ej: `image/png`) |
+| `tamano_bytes` | Number | Tamano en bytes |
+| `fecha_subida` | String | Fecha ISO 8601 de la subida |
+| `bucket` | String | Nombre del bucket S3 |
+
+### Flujo de datos
+- **Subida:** Al generar la presigned URL, se registra automaticamente el archivo en DynamoDB.
+- **Eliminacion:** Al borrar de S3, se elimina tambien el registro de DynamoDB.
+- **Consulta:** El endpoint `/api/metadata` permite consultar todos los registros almacenados.
 
 ---
 
@@ -209,8 +231,11 @@ Ver detalle completo en `docs/reporte_seguridad.md`.
 - Controles SEC-01 a SEC-10 implementados y documentados.
 - Reporte de seguridad creado en `docs/reporte_seguridad.md`.
 
-### Sprint 4 -- Documentacion + Defensa
-- README final completo segun Anexo D.
+### Sprint 4 -- DynamoDB + Documentacion
+- Integrado DynamoDB como registro de metadatos (Arquitectura Multi Cloud).
+- Tabla `archivacloud-p09-files` con metadatos de cada archivo subido.
+- Endpoint `/api/metadata` para consultar registros.
+- README final completo.
 - Tag `v1.0.0` creado.
 
 ---
