@@ -1,6 +1,7 @@
 import os
 import uuid
 import boto3
+from boto3.dynamodb.conditions import Attr
 from datetime import datetime
 from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -202,7 +203,7 @@ async def delete_file(key: str):
         # Eliminar el registro correspondiente de DynamoDB
         try:
             response = dynamo_table.scan(
-                FilterExpression=boto3.dynamodb.conditions.Attr("s3_key").eq(key)
+                FilterExpression=Attr("s3_key").eq(key)
             )
             for item in response.get("Items", []):
                 dynamo_table.delete_item(Key={"id_tabla": item["id_tabla"]})
