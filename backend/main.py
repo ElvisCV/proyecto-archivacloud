@@ -2,6 +2,7 @@ import os
 import re
 import uuid
 import boto3
+from datetime import datetime
 from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -35,16 +36,27 @@ REGION_NAME = "us-east-1"        # Región obligatoria de tu laboratorio
 ALLOWED_EXTENSIONS = {".png", ".svg"}
 MAX_FILE_SIZE_BYTES = 6 * 1024 * 1024  # Límite estricto de pauta de 6 MB
 
-# Conexión segura a S3 adaptada para AWS Academy (Soporta Session Token dinámico)
+# Conexion segura a S3 adaptada para AWS Academy (Soporta Session Token dinamico)
 # Se fuerza Signature V4 porque las credenciales temporales de voclabs no soportan V2
 s3_client = boto3.client(
     "s3",
     region_name=REGION_NAME,
     aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
     aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
-    aws_session_token=os.getenv("AWS_SESSION_TOKEN"),  # Requerido en entornos voclabs
+    aws_session_token=os.getenv("AWS_SESSION_TOKEN"),
     config=Config(signature_version="s3v4"),
 )
+
+# Conexion a DynamoDB para registrar metadatos de archivos (Arquitectura Multi Cloud: S3 + DynamoDB)
+DYNAMO_TABLE_NAME = "archivacloud-p09-files"
+dynamodb_session = boto3.Session(
+    aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
+    aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+    aws_session_token=os.getenv("AWS_SESSION_TOKEN"),
+    region_name=REGION_NAME
+)
+dynamodb = dynamodb_session.resource("dynamodb")
+dynamo_table = dynamodb.Table(DYNAMO_TABLE_NAME)
 
 # Modelo Pydantic para validar los datos que envía el frontend (SEC-03)
 class PresignedUrlRequest(BaseModel):
@@ -110,6 +122,24 @@ async def generate_upload_url(request: PresignedUrlRequest):
         )
         
         logger.info(f"Presigned URL generada para subida: {object_key}")
+
+        # Registrar metadatos del archivo en DynamoDB
+        try:
+            dynamo_table.put_item(
+                Item={
+                    "id_tabla": str(uuid.uuid4()),
+                    "s3_key": object_key,
+                    "nombre_original": request.fileName,
+                    "tipo_archivo": request.fileType,
+                    "tamano_bytes": request.fileSize,
+                    "fecha_subida": datetime.utcnow().isoformat(),
+                    "bucket": BUCKET_NAME
+                }
+            )
+            logger.info(f"Metadatos registrados en DynamoDB para: {object_key}")
+        except ClientError as dynamo_err:
+            logger.error(f"Error al registrar en DynamoDB (no critico): {dynamo_err}")
+
         return {
             "presignedUrl": presigned_url,
             "key": object_key,
@@ -167,10 +197,21 @@ async def delete_file(key: str):
         )
 
     try:
-        # Verificar que el objeto existe antes de eliminar
         s3_client.head_object(Bucket=BUCKET_NAME, Key=key)
         s3_client.delete_object(Bucket=BUCKET_NAME, Key=key)
-        logger.info(f"Archivo eliminado: {key}")
+
+        # Eliminar el registro correspondiente de DynamoDB
+        try:
+            response = dynamo_table.scan(
+                FilterExpression=boto3.dynamodb.conditions.Attr("s3_key").eq(key)
+            )
+            for item in response.get("Items", []):
+                dynamo_table.delete_item(Key={"id_tabla": item["id_tabla"]})
+            logger.info(f"Registro eliminado de DynamoDB para: {key}")
+        except ClientError as dynamo_err:
+            logger.error(f"Error al eliminar de DynamoDB (no critico): {dynamo_err}")
+
+        logger.info(f"Archivo eliminado de S3: {key}")
         return {"message": f"Archivo '{key}' eliminado exitosamente."}
 
     except ClientError as e:
@@ -235,7 +276,26 @@ async def generate_download_url(request: DownloadUrlRequest):
             detail="Error interno al generar el enlace de descarga."
         )
 
+# Endpoint para consultar los metadatos de archivos registrados en DynamoDB
+@app.get("/api/metadata")
+async def get_metadata():
+    try:
+        response = dynamo_table.scan()
+        registros = response.get("Items", [])
+        # Convertir Decimal a int para que sea serializable en JSON
+        for reg in registros:
+            if "tamano_bytes" in reg:
+                reg["tamano_bytes"] = int(reg["tamano_bytes"])
+        logger.info(f"Consulta DynamoDB: {len(registros)} registros encontrados")
+        return {"metadata": registros, "count": len(registros)}
+    except ClientError as e:
+        logger.error(f"Error al consultar DynamoDB: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Error interno al consultar el registro de metadatos."
+        )
+
 # Endpoint obligatorio de auditoria operativa / Health Check
 @app.get("/healthz")
 async def health_check():
-    return {"status": "healthy"}
+    return {"status": "healthy", "services": ["s3", "dynamodb"]}
