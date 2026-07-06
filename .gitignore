@@ -8,6 +8,7 @@ frontend/.env.local
 backend/.env
 backend/venv/
 backend/__pycache__/
+*.pem
 
 # Archivos del enunciado (no son parte del entregable)
 *.docx
